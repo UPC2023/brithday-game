@@ -1,0 +1,6 @@
+{
+  "name": "生日布置小游戏",
+  "description": "亲手装点温馨生日房间，点亮烛光，感应吹灭蜡烛，点燃绚烂礼炮与真挚祝福。",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
