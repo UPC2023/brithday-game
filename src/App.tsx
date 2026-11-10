@@ -5,7 +5,8 @@ import { DecorateGuide, DECOR_ITEMS } from './components/DecorateGuide';
 import { CandleWishStage } from './components/CandleWishStage';
 import { CelebrationModal } from './components/CelebrationModal';
 import { TopBar } from './components/TopBar';
-import { sound } from './utils/audio';
+import { BgmModal } from './components/BgmModal';
+import { sound, BgmScene } from './utils/audio';
 
 export default function App() {
   const [stage, setStage] = useState<GameStage>('DECORATING');
@@ -13,6 +14,8 @@ export default function App() {
   const [candleLit, setCandleLit] = useState<boolean>(true);
   const [blowIntensity, setBlowIntensity] = useState<number>(0);
   const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [isBgmModalOpen, setIsBgmModalOpen] = useState<boolean>(false);
+  const [bgmInitialScene, setBgmInitialScene] = useState<BgmScene>('game');
 
   // Current item to guide user to click
   const nextItemToPlace = DECOR_ITEMS.find((it) => !activeItems.has(it.id))?.id || null;
@@ -21,7 +24,10 @@ export default function App() {
   const handlePlaceItem = (itemId: StepId) => {
     if (activeItems.has(itemId)) return;
 
+    // Start gentle game BGM upon first user decoration action
+    sound.ensureGameMusicPlaying();
     sound.playPop();
+
     const updated = new Set(activeItems);
     updated.add(itemId);
     setActiveItems(updated);
@@ -45,6 +51,7 @@ export default function App() {
 
   // One-click decorate all
   const handleAutoDecorateAll = () => {
+    sound.ensureGameMusicPlaying();
     sound.playSparkle();
     const all = new Set(DECOR_ITEMS.map((d) => d.id));
     setActiveItems(all);
@@ -65,7 +72,7 @@ export default function App() {
 
   // Restart / Reset
   const handleRestart = () => {
-    sound.stopBirthdayTune();
+    sound.setScene('game');
     setActiveItems(new Set());
     setCandleLit(true);
     setBlowIntensity(0);
@@ -77,6 +84,11 @@ export default function App() {
     setIsMuted(muted);
   };
 
+  const handleOpenBgm = (scene: BgmScene) => {
+    setBgmInitialScene(scene);
+    setIsBgmModalOpen(true);
+  };
+
   return (
     <div className="min-h-screen bg-[#faf7f2] flex flex-col justify-between selection:bg-amber-200">
       {/* Top Header */}
@@ -85,6 +97,7 @@ export default function App() {
         isMuted={isMuted}
         onToggleMute={handleToggleMute}
         onRestart={handleRestart}
+        onOpenBgm={() => handleOpenBgm('game')}
       />
 
       {/* Main Interactive Stage */}
@@ -123,8 +136,18 @@ export default function App() {
 
       {/* Grand Celebration Modal */}
       {stage === 'CELEBRATING' && (
-        <CelebrationModal onRestart={handleRestart} />
+        <CelebrationModal
+          onRestart={handleRestart}
+          onOpenBgm={() => handleOpenBgm('card')}
+        />
       )}
+
+      {/* Background Music Selector Modal */}
+      <BgmModal
+        isOpen={isBgmModalOpen}
+        initialScene={bgmInitialScene}
+        onClose={() => setIsBgmModalOpen(false)}
+      />
 
       {/* Quiet Footer */}
       <footer className="text-center py-2 text-[11px] text-stone-400 select-none">

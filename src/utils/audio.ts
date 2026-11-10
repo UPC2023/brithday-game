@@ -1,13 +1,60 @@
 /**
- * Web Audio API synthesizer for Birthday Game.
- * Zero external audio files ensures 100% reliability in all sandbox environments.
+ * Audio Controller for Birthday Game.
+ * Uses real user-provided MP3 tracks from /public/audio/ and user uploaded files.
+ * System synthesizer BGM tracks have been completely removed.
  */
 
-class SoundController {
+import { CANDIDATE_AUDIO_TRACKS, DEFAULT_AUDIO_CONFIG, AudioTrackItem } from '../config/audioConfig';
+
+export type BgmScene = 'game' | 'card';
+
+interface SceneTrackState {
+  trackId: string;
+  trackName: string;
+  url: string;
+  audio: HTMLAudioElement | null;
+}
+
+class AudioController {
   private ctx: AudioContext | null = null;
   public isMuted: boolean = false;
-  private currentTuneTimers: number[] = [];
   public isMusicPlaying: boolean = false;
+  public activeScene: BgmScene = 'game';
+
+  private sceneStates: Record<BgmScene, SceneTrackState> = {
+    game: {
+      trackId: DEFAULT_AUDIO_CONFIG.game.trackId,
+      trackName: DEFAULT_AUDIO_CONFIG.game.name,
+      url: DEFAULT_AUDIO_CONFIG.game.url,
+      audio: null,
+    },
+    card: {
+      trackId: DEFAULT_AUDIO_CONFIG.card.trackId,
+      trackName: DEFAULT_AUDIO_CONFIG.card.name,
+      url: DEFAULT_AUDIO_CONFIG.card.url,
+      audio: null,
+    },
+  };
+
+  public onStateChange?: () => void;
+
+  constructor() {
+    // Pre-initialize audio elements for both scenes
+    this.initSceneAudio('game', DEFAULT_AUDIO_CONFIG.game.url);
+    this.initSceneAudio('card', DEFAULT_AUDIO_CONFIG.card.url);
+    this.setupInteractionUnlock();
+  }
+
+  private setupInteractionUnlock() {
+    if (typeof window === 'undefined') return;
+    const unlock = () => {
+      if (this.activeScene === 'game' && !this.isMusicPlaying && !this.isMuted) {
+        this.playActiveSceneMusic();
+      }
+    };
+    window.addEventListener('click', unlock, { once: true, passive: true });
+    window.addEventListener('touchstart', unlock, { once: true, passive: true });
+  }
 
   private initCtx() {
     if (!this.ctx) {
@@ -19,13 +66,147 @@ class SoundController {
     }
   }
 
+  private initSceneAudio(scene: BgmScene, url: string) {
+    const existing = this.sceneStates[scene].audio;
+    if (existing) {
+      existing.pause();
+      existing.src = '';
+    }
+
+    const audio = new Audio(url);
+    audio.loop = true;
+    audio.volume = 0.8;
+
+    audio.addEventListener('play', () => {
+      if (this.activeScene === scene) {
+        this.isMusicPlaying = true;
+        this.onStateChange?.();
+      }
+    });
+
+    audio.addEventListener('pause', () => {
+      if (this.activeScene === scene) {
+        this.isMusicPlaying = false;
+        this.onStateChange?.();
+      }
+    });
+
+    this.sceneStates[scene].audio = audio;
+    this.sceneStates[scene].url = url;
+  }
+
+  public getTrackName(scene: BgmScene): string {
+    return this.sceneStates[scene].trackName;
+  }
+
+  public getTrackId(scene: BgmScene): string {
+    return this.sceneStates[scene].trackId;
+  }
+
+  // Switch between Game and Greeting Card scenes
+  public setScene(scene: BgmScene) {
+    if (this.activeScene === scene && this.isMusicPlaying) return;
+
+    // Pause old scene audio
+    const oldAudio = this.sceneStates[this.activeScene].audio;
+    if (oldAudio) {
+      oldAudio.pause();
+    }
+
+    this.activeScene = scene;
+
+    if (!this.isMuted) {
+      this.playActiveSceneMusic();
+    } else {
+      this.isMusicPlaying = false;
+    }
+    this.onStateChange?.();
+  }
+
+  // Select one of the candidate tracks from /public/audio/
+  public selectCandidateTrack(scene: BgmScene, track: AudioTrackItem) {
+    const state = this.sceneStates[scene];
+    state.trackId = track.id;
+    state.trackName = `${track.name} - ${track.artist}`;
+
+    this.initSceneAudio(scene, track.url);
+
+    if (this.activeScene === scene && !this.isMuted) {
+      this.playActiveSceneMusic();
+    }
+    this.onStateChange?.();
+  }
+
+  // Set Custom Local Audio File (from <input type="file">)
+  public setCustomAudioFile(scene: BgmScene, file: File) {
+    const state = this.sceneStates[scene];
+    const objectUrl = URL.createObjectURL(file);
+    const displayName = file.name.replace(/\.[^/.]+$/, '');
+
+    state.trackId = 'custom_upload';
+    state.trackName = `${displayName} (本地上传)`;
+
+    this.initSceneAudio(scene, objectUrl);
+
+    if (this.activeScene === scene && !this.isMuted) {
+      this.playActiveSceneMusic();
+    }
+    this.onStateChange?.();
+  }
+
+  // Play Active Scene's music
+  public playActiveSceneMusic() {
+    if (this.isMuted) return;
+    const currentAudio = this.sceneStates[this.activeScene].audio;
+    if (!currentAudio) return;
+
+    currentAudio
+      .play()
+      .then(() => {
+        this.isMusicPlaying = true;
+        this.onStateChange?.();
+      })
+      .catch(() => {
+        this.isMusicPlaying = false;
+        this.onStateChange?.();
+      });
+  }
+
+  // Ensure game music starts on first user click
+  public ensureGameMusicPlaying() {
+    if (this.activeScene === 'game' && !this.isMusicPlaying && !this.isMuted) {
+      this.playActiveSceneMusic();
+    }
+  }
+
   public toggleMute(): boolean {
     this.isMuted = !this.isMuted;
     if (this.isMuted) {
-      this.stopBirthdayTune();
+      this.stopBGM();
+    } else {
+      this.resumeBGM();
     }
+    this.onStateChange?.();
     return this.isMuted;
   }
+
+  public resumeBGM() {
+    if (this.isMuted) return;
+    this.playActiveSceneMusic();
+  }
+
+  public stopBGM() {
+    const audio = this.sceneStates[this.activeScene].audio;
+    if (audio) {
+      audio.pause();
+    }
+    this.isMusicPlaying = false;
+    this.onStateChange?.();
+  }
+
+  // ==========================================
+  // INTERACTIVE SOUND EFFECTS (POPS, CHIMES, ETC.)
+  // ==========================================
 
   public playPop() {
     if (this.isMuted) return;
@@ -48,9 +229,7 @@ class SoundController {
 
       osc.start(now);
       osc.stop(now + 0.13);
-    } catch {
-      // AudioContext policy catch
-    }
+    } catch {}
   }
 
   public playChime() {
@@ -58,7 +237,7 @@ class SoundController {
     try {
       this.initCtx();
       if (!this.ctx) return;
-      const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
+      const notes = [523.25, 659.25, 783.99, 1046.5];
       notes.forEach((freq, idx) => {
         if (!this.ctx) return;
         const now = this.ctx.currentTime + idx * 0.06;
@@ -109,7 +288,6 @@ class SoundController {
       this.initCtx();
       if (!this.ctx) return;
       const now = this.ctx.currentTime;
-      // Warm whoosh + bell
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'sine';
@@ -131,7 +309,6 @@ class SoundController {
     try {
       this.initCtx();
       if (!this.ctx) return;
-      // Breath whoosh using white noise buffer
       const bufferSize = this.ctx.sampleRate * 0.4;
       const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
       const data = buffer.getChannelData(0);
@@ -164,7 +341,6 @@ class SoundController {
     try {
       this.initCtx();
       if (!this.ctx) return;
-      // Fanfare chord: C, E, G, C, E
       const notes = [261.63, 329.63, 392.0, 523.25, 659.25];
       notes.forEach((freq, idx) => {
         if (!this.ctx) return;
@@ -189,7 +365,6 @@ class SoundController {
       this.initCtx();
       if (!this.ctx) return;
       const now = this.ctx.currentTime;
-      // gentle pop + sparkle
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'sine';
@@ -205,112 +380,6 @@ class SoundController {
       setTimeout(() => this.playSparkle(), 120);
     } catch {}
   }
-
-  public playHappyBirthdayTune(loop = true) {
-    if (this.isMuted) return;
-    this.stopBirthdayTune();
-    try {
-      this.initCtx();
-      if (!this.ctx) return;
-      this.isMusicPlaying = true;
-
-      // Note frequencies (Key of C)
-      // "Happy Birthday To You..."
-      // G4, G4, A4, G4, C5, B4
-      // G4, G4, A4, G4, D5, C5
-      // G4, G4, G5, E5, C5, B4, A4
-      // F5, F5, E5, C5, D5, C5
-      const G4 = 392.0;
-      const A4 = 440.0;
-      const B4 = 493.88;
-      const C5 = 523.25;
-      const D5 = 587.33;
-      const E5 = 659.25;
-      const F5 = 698.46;
-      const G5 = 783.99;
-
-      const melody: Array<{ note: number; duration: number }> = [
-        { note: G4, duration: 0.35 },
-        { note: G4, duration: 0.25 },
-        { note: A4, duration: 0.6 },
-        { note: G4, duration: 0.6 },
-        { note: C5, duration: 0.6 },
-        { note: B4, duration: 1.1 },
-
-        { note: G4, duration: 0.35 },
-        { note: G4, duration: 0.25 },
-        { note: A4, duration: 0.6 },
-        { note: G4, duration: 0.6 },
-        { note: D5, duration: 0.6 },
-        { note: C5, duration: 1.1 },
-
-        { note: G4, duration: 0.35 },
-        { note: G4, duration: 0.25 },
-        { note: G5, duration: 0.6 },
-        { note: E5, duration: 0.6 },
-        { note: C5, duration: 0.6 },
-        { note: B4, duration: 0.6 },
-        { note: A4, duration: 0.9 },
-
-        { note: F5, duration: 0.35 },
-        { note: F5, duration: 0.25 },
-        { note: E5, duration: 0.6 },
-        { note: C5, duration: 0.6 },
-        { note: D5, duration: 0.6 },
-        { note: C5, duration: 1.3 },
-      ];
-
-      let elapsed = 0.2;
-      melody.forEach(({ note, duration }) => {
-        const timer = window.setTimeout(() => {
-          if (!this.isMusicPlaying || this.isMuted || !this.ctx) return;
-          const noteTime = this.ctx.currentTime;
-
-          // Music box sound: combination of sine and quiet bell overtone
-          const osc1 = this.ctx.createOscillator();
-          const osc2 = this.ctx.createOscillator();
-          const gainNode = this.ctx.createGain();
-
-          osc1.type = 'sine';
-          osc1.frequency.setValueAtTime(note, noteTime);
-
-          osc2.type = 'triangle';
-          osc2.frequency.setValueAtTime(note * 2, noteTime);
-
-          const vol = 0.09;
-          gainNode.gain.setValueAtTime(vol, noteTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.0001, noteTime + Math.max(duration * 1.2, 0.4));
-
-          osc1.connect(gainNode);
-          osc2.connect(gainNode);
-          gainNode.connect(this.ctx.destination);
-
-          osc1.start(noteTime);
-          osc2.start(noteTime);
-          osc1.stop(noteTime + duration * 1.3);
-          osc2.stop(noteTime + duration * 1.3);
-        }, elapsed * 1000);
-
-        this.currentTuneTimers.push(timer);
-        elapsed += duration;
-      });
-
-      if (loop) {
-        const loopTimer = window.setTimeout(() => {
-          if (this.isMusicPlaying && !this.isMuted) {
-            this.playHappyBirthdayTune(true);
-          }
-        }, (elapsed + 1.5) * 1000);
-        this.currentTuneTimers.push(loopTimer);
-      }
-    } catch {}
-  }
-
-  public stopBirthdayTune() {
-    this.isMusicPlaying = false;
-    this.currentTuneTimers.forEach((t) => clearTimeout(t));
-    this.currentTuneTimers = [];
-  }
 }
 
-export const sound = new SoundController();
+export const sound = new AudioController();

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { StepId, GameStage } from '../types/game';
+import { sound } from '../utils/audio';
 
 interface RoomCanvasProps {
   stage: GameStage;
@@ -21,6 +22,24 @@ export const RoomCanvas: React.FC<RoomCanvasProps> = ({
 }) => {
   const isWishing = stage === 'WISHING';
   const isCelebrating = stage === 'CELEBRATING';
+
+  // Balloon interactive bounce states
+  const [leftBouncing, setLeftBouncing] = useState(false);
+  const [rightBouncing, setRightBouncing] = useState(false);
+
+  const handleLeftBalloonClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setLeftBouncing(true);
+    sound.playPop();
+    setTimeout(() => setLeftBouncing(false), 650);
+  };
+
+  const handleRightBalloonClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRightBouncing(true);
+    sound.playPop();
+    setTimeout(() => setRightBouncing(false), 650);
+  };
 
   // Flame physics reaction
   const flameScaleY = candleLit ? Math.max(0.2, 1 - blowIntensity * 0.75) : 0;
@@ -267,11 +286,20 @@ export const RoomCanvas: React.FC<RoomCanvasProps> = ({
           </g>
         )}
 
-        {/* 5. BALLOONS (Moved down to the ground, with heart and oval variety!) */}
+        {/* 5. BALLOONS (With subtle floating breathing & interactive click bounce animation) */}
         {activeItems.has('balloons') && (
           <g id="decor_balloons">
-            {/* LEFT BALLOONS: Moved to left-bottom, ribbon ends anchored to floor (y=700) */}
-            <g id="left_balloons">
+            {/* LEFT BALLOONS: Floating breathing + click bounce */}
+            <g
+              id="left_balloons"
+              className={`cursor-pointer select-none transition-transform ${
+                leftBouncing ? 'balloon-bounce-active' : 'balloon-float-left'
+              }`}
+              onClick={handleLeftBalloonClick}
+            >
+              {/* Tooltip trigger hint */}
+              <title>轻点气球让它弹跳🎈</title>
+
               {/* Floor weight & bow on floor */}
               <ellipse cx="90" cy="705" rx="18" ry="6" fill="#1e293b" opacity="0.4" />
               <polygon points="80,705 100,705 90,695" fill="#f59e0b" />
@@ -311,8 +339,17 @@ export const RoomCanvas: React.FC<RoomCanvasProps> = ({
               </g>
             </g>
 
-            {/* RIGHT BALLOONS: Moved to right-bottom, ribbon ends anchored to floor (y=705) */}
-            <g id="right_balloons">
+            {/* RIGHT BALLOONS: Floating breathing + click bounce */}
+            <g
+              id="right_balloons"
+              className={`cursor-pointer select-none transition-transform ${
+                rightBouncing ? 'balloon-bounce-active' : 'balloon-float-right'
+              }`}
+              onClick={handleRightBalloonClick}
+            >
+              {/* Tooltip trigger hint */}
+              <title>轻点气球让它弹跳🎈</title>
+
               {/* Floor weight & bow on floor */}
               <ellipse cx="910" cy="705" rx="18" ry="6" fill="#1e293b" opacity="0.4" />
               <polygon points="900,705 920,705 910,695" fill="#f59e0b" />
@@ -424,26 +461,59 @@ export const RoomCanvas: React.FC<RoomCanvasProps> = ({
               <circle cx="6" cy="-16" r="3" fill="#facc15" />
             </g>
 
-            {/* 3. LOTUS / WATER LILY 🪷 (Delicate soft pink petals) */}
-            <g transform="translate(42, -170)">
-              {/* Petals */}
-              {[-35, -20, 0, 20, 35].map((deg) => (
-                <ellipse
-                  key={`lot_pet_${deg}`}
-                  cx="0"
-                  cy="-16"
-                  rx="7"
-                  ry="18"
-                  fill="#fbcfe8"
-                  stroke="#f472b6"
-                  strokeWidth="0.8"
-                  transform={`rotate(${deg})`}
-                />
+            {/* 3. SAKURA CHERRY BLOSSOM 🌸 (Authentic 5-notched-petal blossom matching 🌸 emoji) */}
+            <g transform="translate(38, -170)">
+              {/* Petal Drop Shadow */}
+              <circle cx="0" cy="0" r="24" fill="#000" opacity="0.1" />
+
+              {/* 5 Notched Petals with gradient & heart-notched tips (72 deg apart) */}
+              {[0, 72, 144, 216, 288].map((deg) => (
+                <g key={`sakura_pet_${deg}`} transform={`rotate(${deg})`}>
+                  {/* Outer pink petal body with distinctive V-notch cleft at outer tip */}
+                  <path
+                    d="M 0 0 
+                       C -12 -12 -18 -26 -8 -34 
+                       C -3 -38 0 -31 0 -31 
+                       C 0 -31 3 -38 8 -34 
+                       C 18 -26 12 -12 0 0 Z"
+                    fill="#fbcfe8"
+                    stroke="#f472b6"
+                    strokeWidth="1.2"
+                  />
+                  {/* Inner petal gradient blush */}
+                  <path
+                    d="M 0 0 
+                       C -7 -8 -11 -18 -4 -24 
+                       C -1 -26 0 -22 0 -22 
+                       C 0 -22 1 -26 4 -24 
+                       C 11 -18 7 -8 0 0 Z"
+                    fill="#f472b6"
+                    opacity="0.5"
+                  />
+                </g>
               ))}
-              <circle cx="0" cy="0" r="7" fill="#fde047" />
+
+              {/* Flower Center Deep Magenta Eye */}
+              <circle cx="0" cy="0" r="7" fill="#be123c" />
+
+              {/* Radiating Stamens with Golden Anther Tips */}
+              {[15, 55, 95, 135, 175, 215, 255, 295, 335].map((ang, sIdx) => {
+                const rad = (ang * Math.PI) / 180;
+                const x1 = Math.cos(rad) * 4;
+                const y1 = Math.sin(rad) * 4;
+                const x2 = Math.cos(rad) * 13;
+                const y2 = Math.sin(rad) * 13;
+                return (
+                  <g key={`stamen_${sIdx}`}>
+                    <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#fef08a" strokeWidth="1.2" />
+                    <circle cx={x2} cy={y2} r="1.6" fill="#f59e0b" />
+                  </g>
+                );
+              })}
+              <circle cx="0" cy="0" r="3" fill="#fbbf24" />
             </g>
 
-            {/* 4. CHERRY BLOSSOM / DAISY 🌸🌼 (White & blush pink blossoms) */}
+            {/* 4. CHERRY BLOSSOM BUDS / DAISY 🌼 (Accent white & blush blossoms) */}
             <g transform="translate(18, -130)">
               {[0, 72, 144, 216, 288].map((deg) => (
                 <ellipse
@@ -497,154 +567,386 @@ export const RoomCanvas: React.FC<RoomCanvasProps> = ({
           </g>
         )}
 
-        {/* (C) EXQUISITE MAIN CAKE 🎂 (Firmly on tabletop, base at y=445, center x=500) */}
+        {/* (C) 3-TIER MAIN CAKE 🎂 (Recreated based on reference line art image_3bb72db6.png) */}
         {activeItems.has('main_cake') && (
-          <g id="decor_main_cake" transform="translate(500, 445)">
-            {/* Pedestal Stand Shadow on Tabletop */}
-            <ellipse cx="0" cy="2" rx="72" ry="15" fill="#2d1d13" opacity="0.38" />
+          <g id="decor_main_cake" transform="translate(500, 442)">
+            {/* Cake Base Plate Shadow on Tabletop */}
+            <ellipse cx="0" cy="5" rx="98" ry="20" fill="#2d1d13" opacity="0.38" />
 
-            {/* Silver / White Ceramic Pedestal Stand */}
-            <path
-              d="M -16 -28 L -24 -2 Q 0 4 24 -2 L 16 -28 Z"
-              fill="#cbd5e1"
-              stroke="#94a3b8"
-              strokeWidth="1.5"
-            />
-            {/* Stand Platter Surface */}
-            <ellipse cx="0" cy="-28" rx="86" ry="16" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="2" />
-            <ellipse cx="0" cy="-30" rx="80" ry="13" fill="#ffffff" />
+            {/* Golden Round Platter (as in reference drawing) */}
+            <ellipse cx="0" cy="0" rx="95" ry="18" fill="#fde047" stroke="#d97706" strokeWidth="2.5" />
+            <ellipse cx="0" cy="-2" rx="88" ry="14" fill="#fef08a" />
 
-            {/* CAKE BODY: Exquisite Multi-Tier Patisserie Style */}
-            {/* Bottom Tier: Pistachio Mint Pastel */}
+            {/* === TIER 1 (BOTTOM TIER - PINK WITH FESTOON SWAGS & CONTINUOUS RING OF SMALL ROUND CREAM BALLS 一圈小圆) === */}
+            {/* Bottom-most cream: A continuous ring of neat small round cream balls (一圈小圆) */}
+            {[-76, -69, -62, -54, -46, -38, -30, -22, -14, -6, 2, 10, 18, 26, 34, 42, 50, 58, 66, 73, 78].map((bx, i) => {
+              const normX = bx / 78;
+              const curveY = -6 + 5 * (1 - normX * normX);
+              return (
+                <g key={`t1_bot_round_${i}`} transform={`translate(${bx}, ${curveY})`}>
+                  <circle cx="0" cy="0" r="4.6" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1.1" />
+                  <circle cx="-1.2" cy="-1.3" r="1.3" fill="#ffffff" />
+                  <ellipse cx="0" cy="3.5" rx="3.5" ry="1.2" fill="#000000" opacity="0.06" />
+                </g>
+              );
+            })}
+
+            {/* Pink Cake Body */}
             <path
-              d="M -66 -66 L -66 -35 Q 0 -15 66 -35 L 66 -66 Z"
-              fill="#a7f3d0"
-              stroke="#6ee7b7"
-              strokeWidth="1"
-            />
-            {/* Middle Tier: Vanilla Cream & Lemon Chiffon */}
-            <path
-              d="M -66 -96 L -66 -65 Q 0 -45 66 -65 L 66 -96 Z"
-              fill="#fef08a"
-              stroke="#fde047"
-              strokeWidth="1"
-            />
-            {/* Top Tier: Strawberry Rose Mousse */}
-            <path
-              d="M -66 -125 L -66 -95 Q 0 -75 66 -95 L 66 -125 Z"
-              fill="#fbcfe8"
-              stroke="#f472b6"
-              strokeWidth="1"
+              d="M -78 -64 L -78 -10 Q 0 4 78 -10 L 78 -64 Z"
+              fill="#f472b6"
+              stroke="#db2777"
+              strokeWidth="2"
             />
 
-            {/* Velvet Cream Top Surface */}
-            <ellipse cx="0" cy="-125" rx="66" ry="22" fill="#fff1f2" stroke="#f472b6" strokeWidth="1.2" />
-
-            {/* Decorative Shell Piping along edges */}
+            {/* Draped Garland Swags with Rosettes (matching reference drawing line art) */}
+            {/* Swag 1 (Left) */}
             <path
-              d="M -66 -125 
-                 Q -55 -113 -44 -123 
-                 Q -33 -112 -22 -124 
-                 Q -11 -112 0 -124 
-                 Q 11 -112 22 -124 
-                 Q 33 -112 44 -123 
-                 Q 55 -113 66 -125"
+              d="M -74 -36 Q -52 -18 -30 -34"
               fill="none"
               stroke="#ffffff"
-              strokeWidth="6"
+              strokeWidth="4"
+              strokeLinecap="round"
+            />
+            <path
+              d="M -74 -30 Q -52 -12 -30 -28"
+              fill="none"
+              stroke="#fbcfe8"
+              strokeWidth="2.5"
               strokeLinecap="round"
             />
 
-            {/* Fresh Strawberries & Blueberries on Cake Top */}
-            {[-38, -18, 18, 38].map((xPos, idx) => (
-              <g key={`berry_${idx}`} transform={`translate(${xPos}, -128)`}>
-                <circle cx="0" cy="0" r="5" fill="#ef4444" />
-                <polygon points="-3,-5 0,-8 3,-5 0,-4" fill="#16a34a" />
+            {/* Swag 2 (Center) */}
+            <path
+              d="M -30 -34 Q 0 -12 30 -34"
+              fill="none"
+              stroke="#ffffff"
+              strokeWidth="4"
+              strokeLinecap="round"
+            />
+            <path
+              d="M -30 -28 Q 0 -6 30 -28"
+              fill="none"
+              stroke="#fbcfe8"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+            />
+
+            {/* Swag 3 (Right) */}
+            <path
+              d="M 30 -34 Q 52 -18 74 -36"
+              fill="none"
+              stroke="#ffffff"
+              strokeWidth="4"
+              strokeLinecap="round"
+            />
+            <path
+              d="M 30 -28 Q 52 -12 74 -30"
+              fill="none"
+              stroke="#fbcfe8"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+            />
+
+            {/* Rosette Buttons at Swag Anchors */}
+            {[-74, -30, 30, 74].map((rx, rIdx) => (
+              <g key={`rosette_${rIdx}`} transform={`translate(${rx}, ${rIdx === 0 || rIdx === 3 ? -36 : -34})`}>
+                <circle cx="0" cy="0" r="5" fill="#fef08a" stroke="#ca8a04" strokeWidth="1.2" />
+                <circle cx="0" cy="0" r="2.5" fill="#ffffff" />
+                {/* Hanging pearl drop */}
+                <circle cx="0" cy="7" r="2.5" fill="#ffffff" stroke="#cbd5e1" strokeWidth="0.8" />
               </g>
             ))}
-            {[-28, 0, 28].map((xPos, idx) => (
-              <circle key={`blueb_${idx}`} cx={xPos} cy="-122" r="3.5" fill="#3b82f6" />
+
+            {/* Top of Tier 1 Surface & Decorative Rim (Cherries 🍒, Stars ⭐, Hearts ❤️) */}
+            <ellipse cx="0" cy="-64" rx="78" ry="14" fill="#ffffff" stroke="#db2777" strokeWidth="1.5" />
+            {[-66, -53, -40, -27, -14, 0, 14, 27, 40, 53, 66].map((bx, i) => {
+              const normX = bx / 70;
+              const curveY = -64 + 6 * (1 - normX * normX);
+              const motifType = i % 3; // 0: Cherry, 1: Star, 2: Heart
+              return (
+                <g key={`t1_top_motif_${i}`} transform={`translate(${bx}, ${curveY})`}>
+                  {motifType === 0 && (
+                    <g transform="scale(0.85)">
+                      <path d="M 0 -7 Q 4 -4 2 -1" stroke="#15803d" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+                      <circle cx="2" cy="2" r="3.6" fill="#ef4444" stroke="#991b1b" strokeWidth="0.8" />
+                      <circle cx="1" cy="0.8" r="1.1" fill="#ffffff" opacity="0.9" />
+                    </g>
+                  )}
+                  {motifType === 1 && (
+                    <g transform="scale(0.85)">
+                      <polygon
+                        points="0,-6 1.8,-1.8 6.2,-1.8 2.6,0.9 4,5.2 0,2.6 -4,5.2 -2.6,0.9 -6.2,-1.8 -1.8,-1.8"
+                        fill="#facc15"
+                        stroke="#d97706"
+                        strokeWidth="0.8"
+                      />
+                      <polygon
+                        points="0,-3.8 1.1,-1.1 3.8,-1.1 1.7,0.6 2.5,3.2 0,1.7 -2.5,3.2 -1.7,0.6 -3.8,-1.1 -1.1,-1.1"
+                        fill="#fef08a"
+                      />
+                    </g>
+                  )}
+                  {motifType === 2 && (
+                    <g transform="scale(0.85)">
+                      <path
+                        d="M 0 1 C -4 -4 -6.5 0 0 5.2 C 6.5 0 4 -4 0 1 Z"
+                        fill="#f43f5e"
+                        stroke="#be123c"
+                        strokeWidth="0.8"
+                      />
+                      <circle cx="-1.2" cy="-0.6" r="0.8" fill="#ffffff" opacity="0.85" />
+                    </g>
+                  )}
+                </g>
+              );
+            })}
+
+            {/* === TIER 2 (MIDDLE TIER - SUNNY YELLOW WITH SCALLOPED CREAM, CHERRIES, STARS & HEARTS) === */}
+            {/* Yellow Cake Body */}
+            <path
+              d="M -56 -118 L -56 -64 Q 0 -52 56 -64 L 56 -118 Z"
+              fill="#facc15"
+              stroke="#ca8a04"
+              strokeWidth="2"
+            />
+
+            {/* Middle Tier Scalloped Draped Cream (contained, matching reference drawing) */}
+            <path
+              d="M -56 -118 
+                 Q -44 -98 -32 -108 
+                 Q -16 -92 0 -106 
+                 Q 16 -92 32 -108 
+                 Q 44 -98 56 -118 
+                 L 56 -120 Q 0 -110 -56 -120 Z"
+              fill="#ffffff"
+              stroke="#f1f5f9"
+              strokeWidth="1.5"
+            />
+
+            {/* Celebratory Cherries, Stars & Hearts on Yellow Tier Body (as in reference drawing) */}
+            {/* Left: Twin Cherries with joined stem */}
+            <g transform="translate(-32, -80) scale(0.9)">
+              <path d="M 0 -8 Q -3 -2 -5 3" stroke="#15803d" strokeWidth="1.3" fill="none" />
+              <path d="M 0 -8 Q 3 -2 5 3" stroke="#15803d" strokeWidth="1.3" fill="none" />
+              <ellipse cx="-1" cy="-8" rx="2" ry="1" fill="#22c55e" />
+              <circle cx="-5" cy="4.5" r="4" fill="#dc2626" stroke="#991b1b" strokeWidth="0.9" />
+              <circle cx="-6" cy="3" r="1.1" fill="#ffffff" />
+              <circle cx="5" cy="4.5" r="4" fill="#dc2626" stroke="#991b1b" strokeWidth="0.9" />
+              <circle cx="4" cy="3" r="1.1" fill="#ffffff" />
+            </g>
+
+            {/* Center-Left: Golden Star ⭐ */}
+            <g transform="translate(-14, -84) scale(0.9)">
+              <polygon
+                points="0,-6 1.8,-1.8 6.2,-1.8 2.6,0.9 4,5.2 0,2.6 -4,5.2 -2.6,0.9 -6.2,-1.8 -1.8,-1.8"
+                fill="#facc15"
+                stroke="#b45309"
+                strokeWidth="0.8"
+              />
+              <polygon
+                points="0,-3.8 1.1,-1.1 3.8,-1.1 1.7,0.6 2.5,3.2 0,1.7 -2.5,3.2 -1.7,0.6 -3.8,-1.1 -1.1,-1.1"
+                fill="#fef08a"
+              />
+            </g>
+
+            {/* Center: Heart ❤️ */}
+            <g transform="translate(0, -84) scale(1)">
+              <path d="M 0 1 C -5 -5 -8 0 0 6.5 C 8 0 5 -5 0 1 Z" fill="#ef4444" stroke="#b91c1c" strokeWidth="1.1" />
+              <circle cx="-1.8" cy="-0.8" r="1" fill="#ffffff" opacity="0.85" />
+            </g>
+
+            {/* Center-Right: Golden Star ⭐ */}
+            <g transform="translate(14, -84) scale(0.9)">
+              <polygon
+                points="0,-6 1.8,-1.8 6.2,-1.8 2.6,0.9 4,5.2 0,2.6 -4,5.2 -2.6,0.9 -6.2,-1.8 -1.8,-1.8"
+                fill="#facc15"
+                stroke="#b45309"
+                strokeWidth="0.8"
+              />
+              <polygon
+                points="0,-3.8 1.1,-1.1 3.8,-1.1 1.7,0.6 2.5,3.2 0,1.7 -2.5,3.2 -1.7,0.6 -3.8,-1.1 -1.1,-1.1"
+                fill="#fef08a"
+              />
+            </g>
+
+            {/* Right: Twin Cherries with joined stem 🍒 */}
+            <g transform="translate(32, -80) scale(0.9)">
+              <path d="M 0 -8 Q -3 -2 -5 3" stroke="#15803d" strokeWidth="1.3" fill="none" />
+              <path d="M 0 -8 Q 3 -2 5 3" stroke="#15803d" strokeWidth="1.3" fill="none" />
+              <ellipse cx="1" cy="-8" rx="2" ry="1" fill="#22c55e" />
+              <circle cx="-5" cy="4.5" r="4" fill="#dc2626" stroke="#991b1b" strokeWidth="0.9" />
+              <circle cx="-6" cy="3" r="1.1" fill="#ffffff" />
+              <circle cx="5" cy="4.5" r="4" fill="#dc2626" stroke="#991b1b" strokeWidth="0.9" />
+              <circle cx="4" cy="3" r="1.1" fill="#ffffff" />
+            </g>
+
+            {/* Top of Tier 2 Surface & Decorative Rim (Stars ⭐, Hearts ❤️, Cherries 🍒) */}
+            <ellipse cx="0" cy="-118" rx="56" ry="11" fill="#ffffff" stroke="#ca8a04" strokeWidth="1.5" />
+            {[-46, -33, -20, -7, 7, 20, 33, 46].map((bx, i) => {
+              const normX = bx / 48;
+              const curveY = -118 + 5 * (1 - normX * normX);
+              const motifType = i % 3; // 0: Star, 1: Heart, 2: Cherry
+              return (
+                <g key={`t2_top_motif_${i}`} transform={`translate(${bx}, ${curveY})`}>
+                  {motifType === 0 && (
+                    <g transform="scale(0.8)">
+                      <polygon
+                        points="0,-6 1.8,-1.8 6.2,-1.8 2.6,0.9 4,5.2 0,2.6 -4,5.2 -2.6,0.9 -6.2,-1.8 -1.8,-1.8"
+                        fill="#facc15"
+                        stroke="#d97706"
+                        strokeWidth="0.8"
+                      />
+                      <polygon
+                        points="0,-3.8 1.1,-1.1 3.8,-1.1 1.7,0.6 2.5,3.2 0,1.7 -2.5,3.2 -1.7,0.6 -3.8,-1.1 -1.1,-1.1"
+                        fill="#fef08a"
+                      />
+                    </g>
+                  )}
+                  {motifType === 1 && (
+                    <g transform="scale(0.8)">
+                      <path
+                        d="M 0 1 C -4 -4 -6.5 0 0 5.2 C 6.5 0 4 -4 0 1 Z"
+                        fill="#f43f5e"
+                        stroke="#be123c"
+                        strokeWidth="0.8"
+                      />
+                      <circle cx="-1.2" cy="-0.6" r="0.8" fill="#ffffff" opacity="0.85" />
+                    </g>
+                  )}
+                  {motifType === 2 && (
+                    <g transform="scale(0.8)">
+                      <path d="M 0 -7 Q 4 -4 2 -1" stroke="#15803d" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+                      <circle cx="2" cy="2" r="3.6" fill="#ef4444" stroke="#991b1b" strokeWidth="0.8" />
+                      <circle cx="1" cy="0.8" r="1.1" fill="#ffffff" opacity="0.9" />
+                    </g>
+                  )}
+                </g>
+              );
+            })}
+
+            {/* === TIER 3 (TOP TIER - SKY BLUE WITH SCALLOPED CREAM & WHIPPED ROSETTES) === */}
+            {/* Blue Cake Body */}
+            <path
+              d="M -36 -162 L -36 -118 Q 0 -110 36 -118 L 36 -162 Z"
+              fill="#38bdf8"
+              stroke="#0284c7"
+              strokeWidth="2"
+            />
+
+            {/* Top Tier Scalloped Cream */}
+            <path
+              d="M -36 -162 
+                 Q -24 -148 -12 -154 
+                 Q 0 -144 12 -154 
+                 Q 24 -148 36 -162 
+                 L 36 -164 Q 0 -156 -36 -164 Z"
+              fill="#ffffff"
+              stroke="#f1f5f9"
+              strokeWidth="1.5"
+            />
+
+            {/* Top Tier Cream Top Surface */}
+            <ellipse cx="0" cy="-162" rx="36" ry="8" fill="#ffffff" stroke="#0284c7" strokeWidth="1.5" />
+
+            {/* Swirled Whipped Cream Rosettes Ring on Top (as in reference drawing) */}
+            {[-28, -14, 0, 14, 28].map((rx, rIdx) => (
+              <g key={`top_swirl_${rIdx}`} transform={`translate(${rx}, -166)`}>
+                <ellipse cx="0" cy="0" rx="5.5" ry="3.5" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1" />
+                <path d="M -3 0 Q 0 -6 3 0" stroke="#f1f5f9" strokeWidth="1.5" fill="none" />
+              </g>
             ))}
 
-            {/* Golden Pearl Sprinkles */}
+            {/* 5 ELEGANT CANDLES WITH ANIMATED TEARDROP FLAMES (as in reference drawing) */}
+            {/* Candles 1 to 5: x = -20, -10, 0, 10, 20 */}
             {[
-              { cx: -45, cy: -126 },
-              { cx: -10, cy: -132 },
-              { cx: 10, cy: -132 },
-              { cx: 45, cy: -126 },
-            ].map((p, i) => (
-              <circle key={`pearl_${i}`} cx={p.cx} cy={p.cy} r="2" fill="#f59e0b" />
-            ))}
+              { x: -20, h: 28, delay: 0 },
+              { x: -10, h: 32, delay: 0.1 },
+              { x: 0, h: 36, delay: 0.05, main: true },
+              { x: 10, h: 32, delay: 0.15 },
+              { x: 20, h: 28, delay: 0.08 },
+            ].map((cnd, cIdx) => (
+              <g key={`candle_${cIdx}`} transform={`translate(${cnd.x}, -166)`}>
+                {/* Spiral striped candle stick */}
+                <rect
+                  x="-3"
+                  y={-cnd.h}
+                  width="6"
+                  height={cnd.h}
+                  rx="1.5"
+                  fill="#ef4444"
+                  stroke="#b91c1c"
+                  strokeWidth="1"
+                />
+                <line
+                  x1="-2"
+                  y1={-cnd.h + 2}
+                  x2="2"
+                  y2={-cnd.h + 8}
+                  stroke="#ffffff"
+                  strokeWidth="1.2"
+                />
+                <line
+                  x1="-2"
+                  y1={-cnd.h + 10}
+                  x2="2"
+                  y2={-cnd.h + 16}
+                  stroke="#ffffff"
+                  strokeWidth="1.2"
+                />
+                <line
+                  x1="-2"
+                  y1={-cnd.h + 18}
+                  x2="2"
+                  y2={-cnd.h + 24}
+                  stroke="#ffffff"
+                  strokeWidth="1.2"
+                />
 
-            {/* TALL ELEGANT GOLDEN CELEBRATION CANDLES WITH ANIMATED FLAMES */}
-            {/* Candle 1 (Left) */}
-            <g id="candle_left">
-              <rect x="-24" y="-170" width="6" height="42" rx="2" fill="url(#goldCandle)" stroke="#d97706" strokeWidth="0.8" />
-              <line x1="-21" y1="-170" x2="-21" y2="-178" stroke="#78350f" strokeWidth="1.5" />
-              {candleLit && (
-                <g
-                  style={{
-                    transformOrigin: '-21px -178px',
-                    transform: `skewX(${flameSkewX - 2}deg) scaleY(${flameScaleY * 0.95})`,
-                    transition: 'transform 0.08s ease-out',
-                  }}
-                >
-                  <circle cx="-21" cy="-188" r="22" fill="#f59e0b" opacity="0.35" filter="url(#candleGlow)" />
-                  <path d="M -21 -202 Q -29 -186 -21 -178 Q -13 -186 -21 -202 Z" fill="#f97316" />
-                  <path d="M -21 -196 Q -26 -185 -21 -179 Q -16 -185 -21 -196 Z" fill="#fef08a" />
-                  <ellipse cx="-21" cy="-183" rx="2" ry="3.5" fill="#ffffff" />
-                </g>
-              )}
-            </g>
+                {/* Wick */}
+                <line x1="0" y1={-cnd.h} x2="0" y2={-cnd.h - 5} stroke="#451a03" strokeWidth="1.5" />
 
-            {/* Candle 2 (Center - Tallest) */}
-            <g id="candle_center">
-              <rect x="-3" y="-180" width="6" height="52" rx="2" fill="url(#goldCandle)" stroke="#d97706" strokeWidth="0.8" />
-              <line x1="0" y1="-180" x2="0" y2="-188" stroke="#78350f" strokeWidth="1.5" />
-              {candleLit && (
-                <g
-                  style={{
-                    transformOrigin: '0px -188px',
-                    transform: `skewX(${flameSkewX}deg) scaleY(${flameScaleY * 1.05})`,
-                    transition: 'transform 0.08s ease-out',
-                  }}
-                >
-                  <circle cx="0" cy="-198" r="26" fill="#f59e0b" opacity="0.38" filter="url(#candleGlow)" />
-                  <path d="M 0 -214 Q -9 -196 0 -188 Q 9 -196 0 -214 Z" fill="#f97316" />
-                  <path d="M 0 -206 Q -6 -195 0 -189 Q 6 -195 0 -206 Z" fill="#fef08a" />
-                  <ellipse cx="0" cy="-193" rx="2.5" ry="4" fill="#ffffff" />
-                </g>
-              )}
-            </g>
+                {/* Animated Teardrop Candle Flame */}
+                {candleLit && (
+                  <g
+                    style={{
+                      transformOrigin: `0px ${-cnd.h - 5}px`,
+                      transform: `skewX(${flameSkewX + (cIdx - 2) * 1.5}deg) scaleY(${flameScaleY * (cnd.main ? 1.05 : 0.95)})`,
+                      transition: 'transform 0.08s ease-out',
+                    }}
+                  >
+                    {/* Candle Glow */}
+                    <circle
+                      cx="0"
+                      cy={-cnd.h - 13}
+                      r={cnd.main ? 24 : 16}
+                      fill="#f59e0b"
+                      opacity="0.35"
+                      filter="url(#candleGlow)"
+                    />
+                    {/* Outer Orange Flame */}
+                    <path
+                      d={`M 0 ${-cnd.h - 22} Q -6 ${-cnd.h - 12} 0 ${-cnd.h - 5} Q 6 ${-cnd.h - 12} 0 ${-cnd.h - 22} Z`}
+                      fill="#f97316"
+                    />
+                    {/* Inner Yellow Core */}
+                    <path
+                      d={`M 0 ${-cnd.h - 18} Q -3 ${-cnd.h - 11} 0 ${-cnd.h - 6} Q 3 ${-cnd.h - 11} 0 ${-cnd.h - 18} Z`}
+                      fill="#fef08a"
+                    />
+                    <ellipse cx="0" cy={-cnd.h - 9} rx="1.5" ry="2.5" fill="#ffffff" />
+                  </g>
+                )}
 
-            {/* Candle 3 (Right) */}
-            <g id="candle_right">
-              <rect x="18" y="-170" width="6" height="42" rx="2" fill="url(#goldCandle)" stroke="#d97706" strokeWidth="0.8" />
-              <line x1="21" y1="-170" x2="21" y2="-178" stroke="#78350f" strokeWidth="1.5" />
-              {candleLit && (
-                <g
-                  style={{
-                    transformOrigin: '21px -178px',
-                    transform: `skewX(${flameSkewX + 2}deg) scaleY(${flameScaleY * 0.92})`,
-                    transition: 'transform 0.08s ease-out',
-                  }}
-                >
-                  <circle cx="21" cy="-188" r="22" fill="#f59e0b" opacity="0.35" filter="url(#candleGlow)" />
-                  <path d="M 21 -202 Q 13 -186 21 -178 Q 29 -186 21 -202 Z" fill="#f97316" />
-                  <path d="M 21 -196 Q 16 -185 21 -179 Q 26 -185 21 -196 Z" fill="#fef08a" />
-                  <ellipse cx="21" cy="-183" rx="2" ry="3.5" fill="#ffffff" />
-                </g>
-              )}
-            </g>
-
-            {/* Smoke Puff when extinguished */}
-            {!candleLit && (
-              <g opacity="0.75" filter="url(#softGlow)">
-                <circle cx="-21" cy="-185" r="9" fill="#e2e8f0" />
-                <circle cx="0" cy="-195" r="11" fill="#e2e8f0" />
-                <circle cx="21" cy="-185" r="9" fill="#e2e8f0" />
+                {/* Smoke Puff when extinguished */}
+                {!candleLit && (
+                  <g opacity="0.75" filter="url(#softGlow)">
+                    <circle cx="0" cy={-cnd.h - 8} r="6" fill="#e2e8f0" />
+                    <circle cx={cIdx % 2 === 0 ? -3 : 3} cy={-cnd.h - 16} r="5" fill="#e2e8f0" opacity="0.6" />
+                  </g>
+                )}
               </g>
-            )}
+            ))}
           </g>
         )}
 

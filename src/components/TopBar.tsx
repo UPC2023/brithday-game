@@ -1,5 +1,5 @@
 import React from 'react';
-import { Volume2, VolumeX, RotateCcw, Cake, Sparkles } from 'lucide-react';
+import { Volume2, VolumeX, RotateCcw, Cake, Sparkles, Music } from 'lucide-react';
 import { sound } from '../utils/audio';
 import { GameStage } from '../types/game';
 
@@ -8,6 +8,7 @@ interface TopBarProps {
   isMuted: boolean;
   onToggleMute: () => void;
   onRestart: () => void;
+  onOpenBgm: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -15,6 +16,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   isMuted,
   onToggleMute,
   onRestart,
+  onOpenBgm,
 }) => {
   return (
     <header className="w-full max-w-4xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
@@ -47,6 +49,17 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       {/* Actions */}
       <div className="flex items-center gap-2 shrink-0">
+        <button
+          type="button"
+          onClick={onOpenBgm}
+          aria-label="指定背景音乐"
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white hover:bg-stone-100 border border-stone-200/80 text-stone-700 text-xs font-medium transition-colors cursor-pointer shadow-xs"
+          title="指定背景音乐"
+        >
+          <Music className="w-3.5 h-3.5 text-rose-500" />
+          <span className="hidden sm:inline">BGM音乐</span>
+        </button>
+
         <button
           type="button"
           onClick={onToggleMute}
