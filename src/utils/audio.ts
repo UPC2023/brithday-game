@@ -8,6 +8,12 @@ import { CANDIDATE_AUDIO_TRACKS, DEFAULT_AUDIO_CONFIG, AudioTrackItem } from '..
 
 export type BgmScene = 'game' | 'card';
 
+export interface AudioCheckResult {
+  ok: boolean;
+  error?: string;
+  duration?: number;
+}
+
 interface SceneTrackState {
   trackId: string;
   trackName: string;
@@ -15,11 +21,17 @@ interface SceneTrackState {
   audio: HTMLAudioElement | null;
 }
 
-class AudioController {
+export class AudioController {
   private ctx: AudioContext | null = null;
   public isMuted: boolean = false;
   public isMusicPlaying: boolean = false;
   public activeScene: BgmScene = 'game';
+
+  // Track errors per scene (decoding failure, invalid path, format not supported)
+  public lastErrors: Record<BgmScene, string | null> = {
+    game: null,
+    card: null,
+  };
 
   private sceneStates: Record<BgmScene, SceneTrackState> = {
     game: {
@@ -48,7 +60,7 @@ class AudioController {
   private setupInteractionUnlock() {
     if (typeof window === 'undefined') return;
     const unlock = () => {
-      if (this.activeScene === 'game' && !this.isMusicPlaying && !this.isMuted) {
+      if (!this.isMusicPlaying && !this.isMuted) {
         this.playActiveSceneMusic();
       }
     };
@@ -66,30 +78,131 @@ class AudioController {
     }
   }
 
-  private initSceneAudio(scene: BgmScene, url: string) {
+  /**
+   * Fast, accurate audio verification check:
+   * Uses AudioContext to decode audio headers/stream. If a user extracted a video file
+   * and simply renamed it to .mp3, decodeAudioData will catch it immediately within milliseconds.
+   */
+  public static async checkAudioFilePlayable(file: File): Promise<AudioCheckResult> {
+    if (typeof window === 'undefined') return { ok: true };
+
+    const name = file.name.toLowerCase();
+    const validExt = /\.(mp3|m4a|aac|wav|ogg)$/i.test(name);
+    if (!validExt && !file.type.startsWith('audio/')) {
+      return {
+        ok: false,
+        error: `不支持的文件格式 (${file.name})。请上传标准 MP3、M4A、AAC 或 WAV 音频文件。`,
+      };
+    }
+
+    // Try testing decoding with AudioContext
+    try {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (AudioCtx) {
+        const testCtx = new AudioCtx();
+        try {
+          const sliceSize = Math.min(file.size, 512 * 1024);
+          const slice = file.slice(0, sliceSize);
+          const buffer = await slice.arrayBuffer();
+          await testCtx.decodeAudioData(buffer);
+          testCtx.close();
+          return { ok: true };
+        } catch {
+          // If first slice failed, test full buffer for files < 4MB
+          if (file.size < 4 * 1024 * 1024) {
+            try {
+              const fullBuffer = await file.arrayBuffer();
+              await testCtx.decodeAudioData(fullBuffer);
+              testCtx.close();
+              return { ok: true };
+            } catch {
+              testCtx.close();
+              return {
+                ok: false,
+                error: '该文件音频解码失败。如果您是从视频提取的音轨，可能仅修改了后缀名而内部仍是视频容器封装，浏览器无法直接播放。建议重新转码为标准 MP3。',
+              };
+            }
+          }
+          testCtx.close();
+          return {
+            ok: false,
+            error: '该文件音频解码异常，浏览器无法识别此编码格式。建议转码为标准 MP3 后再上传。',
+          };
+        }
+      }
+    } catch {
+      // Fallback
+    }
+
+    return { ok: true };
+  }
+
+  public initSceneAudio(scene: BgmScene, url: string) {
+    this.lastErrors[scene] = null;
+
+    // Safely cleanup existing audio without triggering false error events
     const existing = this.sceneStates[scene].audio;
     if (existing) {
+      existing.onplay = null;
+      existing.onpause = null;
+      existing.onerror = null;
       existing.pause();
       existing.src = '';
+      // Note: Do NOT call existing.load() after clearing src, as that triggers MEDIA_ERR_SRC_NOT_SUPPORTED
     }
 
     const audio = new Audio(url);
     audio.loop = true;
     audio.volume = 0.8;
+    audio.preload = 'auto';
 
-    audio.addEventListener('play', () => {
+    audio.onplay = () => {
       if (this.activeScene === scene) {
         this.isMusicPlaying = true;
+        this.lastErrors[scene] = null;
         this.onStateChange?.();
       }
-    });
+    };
 
-    audio.addEventListener('pause', () => {
+    audio.onpause = () => {
       if (this.activeScene === scene) {
         this.isMusicPlaying = false;
         this.onStateChange?.();
       }
-    });
+    };
+
+    // Error capture handler with active-element verification
+    audio.onerror = () => {
+      // Guard: ignore if this audio element is no longer the active element for this scene
+      if (this.sceneStates[scene].audio !== audio) return;
+      // Guard: ignore if src was cleared or empty
+      if (!audio.src || audio.src === '' || audio.src === window.location.href) return;
+
+      let message = '音频加载失败或格式不兼容';
+      const err = audio.error;
+      if (err) {
+        switch (err.code) {
+          case 1: // MEDIA_ERR_ABORTED
+            return; // Normal abort, do not mark as error
+          case 2: // MEDIA_ERR_NETWORK
+            message = '网络传输错误或音频路径不存在 (404)';
+            break;
+          case 3: // MEDIA_ERR_DECODE
+            message = '音频解码失败：可能是视频提取的伪音频或文件损坏';
+            break;
+          case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
+            message = '当前音频格式不受浏览器支持（请尝试标准 MP3 或恢复默认）';
+            break;
+          default:
+            message = `音频加载异常 (Code: ${err.code})`;
+        }
+      }
+      this.lastErrors[scene] = message;
+      if (this.activeScene === scene) {
+        this.isMusicPlaying = false;
+      }
+      this.onStateChange?.();
+    };
 
     this.sceneStates[scene].audio = audio;
     this.sceneStates[scene].url = url;
@@ -101,6 +214,35 @@ class AudioController {
 
   public getTrackId(scene: BgmScene): string {
     return this.sceneStates[scene].trackId;
+  }
+
+  public getLastError(scene: BgmScene): string | null {
+    return this.lastErrors[scene];
+  }
+
+  public clearError(scene: BgmScene) {
+    this.lastErrors[scene] = null;
+    this.onStateChange?.();
+  }
+
+  /**
+   * Reset scene audio to default track and clear any playback errors.
+   */
+  public resetToDefaultTrack(scene: BgmScene) {
+    const defaultConfig = DEFAULT_AUDIO_CONFIG[scene];
+    this.lastErrors[scene] = null;
+
+    const state = this.sceneStates[scene];
+    state.trackId = defaultConfig.trackId;
+    state.trackName = defaultConfig.name;
+    state.url = defaultConfig.url;
+
+    this.initSceneAudio(scene, defaultConfig.url);
+
+    if (this.activeScene === scene && !this.isMuted) {
+      this.playActiveSceneMusic();
+    }
+    this.onStateChange?.();
   }
 
   // Switch between Game and Greeting Card scenes
@@ -164,10 +306,20 @@ class AudioController {
       .play()
       .then(() => {
         this.isMusicPlaying = true;
+        this.lastErrors[this.activeScene] = null;
         this.onStateChange?.();
       })
-      .catch(() => {
-        this.isMusicPlaying = false;
+      .catch((err: unknown) => {
+        const error = err as Error | undefined;
+        // NotAllowedError (user gesture needed) or AbortError (interrupted by pause / switch)
+        // are standard browser playback lifecycles, NOT file corruption!
+        if (error && (error.name === 'NotAllowedError' || error.name === 'AbortError')) {
+          this.isMusicPlaying = false;
+        } else {
+          this.isMusicPlaying = false;
+          this.lastErrors[this.activeScene] =
+            error?.message || '浏览器无法播放此音频，请检查编码格式';
+        }
         this.onStateChange?.();
       });
   }
